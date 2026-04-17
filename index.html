@@ -372,7 +372,7 @@
 }</code>
       </div>
       <div class="connect-bar">
-        <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="" />
+        <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzDbgi-GHs6t2fn9TCj6o_I2vGULDTVQribwYvXIMifMe1wjmdeFrKYuV-hZfwk3cQ3JA/exec" />
         <button class="btn btn-primary" onclick="loadSheet()">
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           読み込む
@@ -525,16 +525,21 @@ function loadSheet() {
 
   // Apps Script の exec URL が貼られた場合 → JSON取得
   if (val.includes('script.google.com')) {
-    fetch(val)
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(data => {
+    fetch(val, { redirect: 'follow', mode: 'cors' })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(text => {
+        let data;
+        try { data = JSON.parse(text); } catch(e) { throw new Error('レスポンスがJSON形式ではありません'); }
         if (!Array.isArray(data) || data.length < 2) { showError('データがありません'); return; }
         allData = data.slice(2).filter(r => r.some(c => String(c).trim()));
         populateGyoshuFilter();
         applyFilters();
-        showToast(`${allData.length}件のデータを読み込みました`);
+        showToast(allData.length + '件のデータを読み込みました');
       })
-      .catch(() => showError('Apps ScriptのURLから読み込めませんでした。\nデプロイ設定で「アクセスできるユーザー：全員」になっているか確認してください。'));
+      .catch(e => showError('読み込みエラー: ' + e.message + '\n\n確認事項:\n・デプロイ時「アクセスできるユーザー」が「全員」になっているか\n・承認まで完了しているか\n・URLが /exec で終わっているか'));
     return;
   }
 
