@@ -896,25 +896,26 @@ function exportCSV() {
 }
 
 
-// ---- AO列へ書き込み ----
+// ---- AO列へ書き込み（GETパラメータ方式）----
 function writeFlag(id, flag) {
-  if (!gasUrl) return; // GASのURLが未設定なら何もしない
+  if (!gasUrl) { console.warn('gasUrl未設定'); return; }
   const sheetRow = rowNumberMap.get(id);
-  if (!sheetRow) return;
-  fetch(gasUrl, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ row: sheetRow, flag: flag })
-  })
-  .then(r => r.text())
-  .then(text => {
-    try {
-      const res = JSON.parse(text);
-      if (!res.success) console.warn('書き込み失敗', res);
-    } catch(e) { console.warn('書き込みレスポンス解析失敗', text); }
-  })
-  .catch(e => console.warn('書き込みエラー', e));
+  if (!sheetRow) { console.warn('行番号が見つかりません', id); return; }
+  const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + flag;
+  console.log('writeFlag:', url);
+  fetch(url, { redirect: 'follow' })
+    .then(r => r.text())
+    .then(text => {
+      try {
+        const res = JSON.parse(text);
+        if (res.success) {
+          showToast(flag ? '入力済みをスプシに保存しました' : 'チェックを解除しました');
+        } else {
+          console.warn('書き込み失敗', res);
+        }
+      } catch(e) { console.warn('レスポンス解析失敗', text); }
+    })
+    .catch(e => { console.warn('writeFlag エラー', e); });
 }
 // ---- ログイン ----
 // ユーザー情報（ID: パスワード の形式で追加できます）
