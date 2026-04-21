@@ -336,9 +336,111 @@
     padding: 1px 5px;
     border-radius: 4px;
   }
+
+  /* ログイン画面 */
+  .login-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg3);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem 2.5rem;
+    width: min(380px, 90vw);
+    box-shadow: var(--shadow);
+  }
+  .login-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+  .login-logo svg { color: var(--info-text); }
+  .login-logo-text { font-size: 15px; font-weight: 500; color: var(--text); }
+  .login-title { font-size: 20px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .login-sub { font-size: 13px; color: var(--text2); margin-bottom: 1.5rem; }
+  .login-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .login-field label { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .login-field input {
+    font-size: 14px;
+    padding: 9px 12px;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    background: var(--bg2);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .login-field input:focus { border-color: var(--info-text); }
+  .login-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--info-text);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: opacity 0.15s;
+  }
+  .login-btn:hover { opacity: 0.88; }
+  .login-error {
+    font-size: 12px;
+    color: var(--success-text);
+    background: #fde8e8;
+    color: #c0392b;
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .login-error.show { display: block; }
+  .logout-btn {
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    height: 30px;
+  }
+  .logout-btn:hover { background: var(--bg2); }
 </style>
 </head>
 <body>
+
+<!-- ログイン画面 -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span class="login-logo-text">相談者管理システム</span>
+    </div>
+    <div class="login-title">ログイン</div>
+    <div class="login-sub">IDとパスワードを入力してください</div>
+    <div class="login-error" id="loginError">IDまたはパスワードが正しくありません</div>
+    <div class="login-field">
+      <label>ユーザーID</label>
+      <input type="text" id="loginId" placeholder="ID" autocomplete="username" />
+    </div>
+    <div class="login-field">
+      <label>パスワード</label>
+      <input type="password" id="loginPass" placeholder="パスワード" autocomplete="current-password" />
+    </div>
+    <button class="login-btn" onclick="doLogin()">ログイン</button>
+  </div>
+</div>
 
 <header>
   <div class="header-title">
@@ -352,6 +454,7 @@
       <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
       CSV書き出し
     </button>
+    <button class="logout-btn" onclick="doLogout()">ログアウト</button>
   </div>
 </header>
 
@@ -763,6 +866,49 @@ function exportCSV() {
   a.download = `相談者リスト_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
+
+// ---- ログイン ----
+// ユーザー情報（ID: パスワード の形式で追加できます）
+const USERS = {
+  'nakamura': 'Yorozu-jimu-2026',
+  'admin':  'yorozu@admin'
+};
+const SESSION_KEY = 'yorozu_login';
+
+function checkLogin() {
+  if (sessionStorage.getItem(SESSION_KEY) === 'ok') {
+    document.getElementById('loginOverlay').style.display = 'none';
+  }
+  // Enterキーでログイン
+  document.getElementById('loginPass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document.getElementById('loginId').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+}
+
+function doLogin() {
+  const id   = document.getElementById('loginId').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err  = document.getElementById('loginError');
+  if (USERS[id] && USERS[id] === pass) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    document.getElementById('loginOverlay').style.display = 'none';
+    err.classList.remove('show');
+  } else {
+    err.classList.add('show');
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginPass').focus();
+  }
+}
+
+function doLogout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  location.reload();
+}
+
+checkLogin();
 </script>
 </body>
 </html>
