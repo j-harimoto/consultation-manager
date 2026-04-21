@@ -461,7 +461,7 @@
 <script>
 let allData = [], checkedIds = new Set(), currentRows = [], currentDetailRow = null;
 
-const COL = { ts:0, B:1, C:6, H:7, K:10, M:12, N:13, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25 };
+const COL = { ts:0, B:1, C:6, H:7, K:10, L:11, M:12, N:13, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26 };
 // N列(屋号)が空の場合はZ列(相談者名・屋号)を使う
 function getYago(row) {
   const n = gv(row,'N');
@@ -483,6 +483,7 @@ const SECTIONS = [
   { title: '連絡先', fields: [
     { label: 'メールアドレス', key: 'B' },
     { label: 'お電話番号', key: 'K' },
+    { label: '郵便番号', key: 'L' },
     { label: '会社の所在地', key: 'M' },
   ]},
   { title: '会社情報', fields: [
@@ -493,6 +494,7 @@ const SECTIONS = [
     { label: '売上高', key: 'U' },
     { label: '従業員数', key: 'V' },
     { label: '創業時期', key: 'W' },
+    { label: '紹介支援機関', key: 'AA' },
   ]},
 ];
 
