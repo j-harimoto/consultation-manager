@@ -545,7 +545,7 @@
     <div class="modal-header">
       <h2 id="modalTitle">詳細</h2>
       <div class="modal-header-actions">
-        <button class="btn btn-sm" onclick="markDoneFromModal()">✓ 入力済みにする</button>
+        <span id="modalStatusBtns"></span>
         <button class="btn btn-sm btn-primary" onclick="copyAllFields()">
           <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           全てコピー
@@ -652,11 +652,11 @@ function loadSheet() {
           r._sheetRow = sheetRow;
           return true;
         });
-        // AO列（index40）が'✓'の行をcheckedIdsに追加
+        // AO列（index40）が '1' の行をcheckedIdsに追加
         checkedIds = new Set();
         allData.forEach(r => {
           const ao = String(r[40] || '').trim();
-          if (ao === '✓' || ao === '1' || ao === 'TRUE' || ao === 'true') {
+          if (ao === '1') {
             checkedIds.add(rowId(r));
           }
           rowNumberMap.set(rowId(r), r._sheetRow);
@@ -831,6 +831,14 @@ function showDetail(row) {
     });
     body.appendChild(grid);
   });
+  // 入力済みボタンを状態に応じて切り替え
+  const isDone = checkedIds.has(rowId(row));
+  const btnArea = document.getElementById('modalStatusBtns');
+  if (isDone) {
+    btnArea.innerHTML = '<button class="btn btn-sm" style="color:var(--success-text);border-color:var(--success-border);" onclick="unmarkDoneFromModal()">✕ 入力済みを取り消す</button>';
+  } else {
+    btnArea.innerHTML = '<button class="btn btn-sm" onclick="markDoneFromModal()">✓ 入力済みにする</button>';
+  }
   document.getElementById('modal').classList.add('open');
 }
 
@@ -861,9 +869,22 @@ function markDoneFromModal() {
   if (!currentDetailRow) return;
   const id = rowId(currentDetailRow);
   checkedIds.add(id);
+  // ボタン表示を取り消しボタンに切り替え
+  document.getElementById('modalStatusBtns').innerHTML =
+    '<button class="btn btn-sm" style="color:var(--success-text);border-color:var(--success-border);" onclick="unmarkDoneFromModal()">✕ 入力済みを取り消す</button>';
   applyFilters();
   writeFlag(id, true);
-  showToast('入力済みにしました');
+}
+
+function unmarkDoneFromModal() {
+  if (!currentDetailRow) return;
+  const id = rowId(currentDetailRow);
+  checkedIds.delete(id);
+  // ボタン表示を入力済みボタンに切り替え
+  document.getElementById('modalStatusBtns').innerHTML =
+    '<button class="btn btn-sm" onclick="markDoneFromModal()">✓ 入力済みにする</button>';
+  applyFilters();
+  writeFlag(id, false);
 }
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
@@ -897,19 +918,19 @@ function exportCSV() {
 
 
 // ---- AO列へ書き込み（GETパラメータ方式）----
+// flag=true → '1' を書き込み、false → 空白にする
 function writeFlag(id, flag) {
   if (!gasUrl) { console.warn('gasUrl未設定'); return; }
   const sheetRow = rowNumberMap.get(id);
   if (!sheetRow) { console.warn('行番号が見つかりません', id); return; }
-  const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + flag;
-  console.log('writeFlag:', url);
+  const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + (flag ? 'true' : 'false');
   fetch(url, { redirect: 'follow' })
     .then(r => r.text())
     .then(text => {
       try {
         const res = JSON.parse(text);
         if (res.success) {
-          showToast(flag ? '入力済みをスプシに保存しました' : 'チェックを解除しました');
+          showToast(flag ? '✓ 入力済みとしてスプシに保存しました' : '入力済みを取り消しました');
         } else {
           console.warn('書き込み失敗', res);
         }
