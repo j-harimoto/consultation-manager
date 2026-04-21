@@ -642,25 +642,22 @@ function loadSheet() {
         try { data = JSON.parse(text); } catch(e) { throw new Error('レスポンスがJSON形式ではありません'); }
         if (!Array.isArray(data) || data.length < 2) { showError('データがありません'); return; }
         gasUrl = val;
-        // 2行目(index1)がヘッダー、データは3行目(index2)から
-        // 実際のスプシ行番号 = dataのindex + 1（0始まりなので）
         rowNumberMap = new Map();
-        allData = data.slice(2).filter((r, i) => {
-          if (!r.some(c => String(c).trim())) return false;
-          const sheetRow = i + 3; // slice(2)後のindex i → 元のdataのindex i+2 → 行番号 i+3
-          // rowIdはデータ確定後に設定するので仮保存
-          r._sheetRow = sheetRow;
-          return true;
-        });
-        // AO列（index40）が '1' の行をcheckedIdsに追加
         checkedIds = new Set();
-        allData.forEach(r => {
-          const ao = String(r[40] || '').trim();
-          if (ao === '1') {
-            checkedIds.add(rowId(r));
-          }
-          rowNumberMap.set(rowId(r), r._sheetRow);
-        });
+        allData = [];
+        // data[0]=メモ行, data[1]=ヘッダー行, data[2]以降がデータ
+        // スプシの行番号 = dataのインデックス + 1（1始まり）
+        for (var di = 2; di < data.length; di++) {
+          var r = data[di];
+          if (!r.some(function(c){ return String(c).trim(); })) continue;
+          var sheetRow = di + 1; // dataインデックス0 → スプシ1行目
+          r._sheetRow = sheetRow;
+          allData.push(r);
+          var rid = rowId(r);
+          rowNumberMap.set(rid, sheetRow);
+          var ao = String(r[40] || '').trim();
+          if (ao === '1') checkedIds.add(rid);
+        }
         populateGyoshuFilter();
         applyFilters();
         showToast(allData.length + '件のデータを読み込みました');
@@ -920,23 +917,24 @@ function exportCSV() {
 // ---- AO列へ書き込み（GETパラメータ方式）----
 // flag=true → '1' を書き込み、false → 空白にする
 function writeFlag(id, flag) {
-  if (!gasUrl) { console.warn('gasUrl未設定'); return; }
+  if (!gasUrl) { showToast('エラー: gasUrl未設定'); return; }
   const sheetRow = rowNumberMap.get(id);
-  if (!sheetRow) { console.warn('行番号が見つかりません', id); return; }
+  if (!sheetRow) { showToast('エラー: 行番号が見つかりません'); return; }
   const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + (flag ? 'true' : 'false');
+  showToast('書き込み中... 行' + sheetRow);
   fetch(url, { redirect: 'follow' })
     .then(r => r.text())
     .then(text => {
       try {
         const res = JSON.parse(text);
         if (res.success) {
-          showToast(flag ? '✓ 入力済みとしてスプシに保存しました' : '入力済みを取り消しました');
+          showToast(flag ? '✓ ' + sheetRow + '行目をスプシに保存しました' : sheetRow + '行目の入力済みを取り消しました');
         } else {
-          console.warn('書き込み失敗', res);
+          showToast('書き込み失敗: ' + text);
         }
-      } catch(e) { console.warn('レスポンス解析失敗', text); }
+      } catch(e) { showToast('レスポンスエラー: ' + text.slice(0,40)); }
     })
-    .catch(e => { console.warn('writeFlag エラー', e); });
+    .catch(e => { showToast('通信エラー: ' + e.message); });
 }
 // ---- ログイン ----
 // ユーザー情報（ID: パスワード の形式で追加できます）
