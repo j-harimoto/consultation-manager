@@ -563,8 +563,10 @@
 
 <script>
 let allData = [], checkedIds = new Set(), currentRows = [], currentDetailRow = null;
+let gasUrl = ''; // GAS URL を保持（書き込みに使う）
+let rowNumberMap = new Map(); // rowId → スプシの実際の行番号
 
-const COL = { ts:0, B:1, C:6, H:7, K:10, L:11, M:12, N:13, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26 };
+const COL = { ts:0, B:1, C:6, H:7, K:10, L:11, M:12, N:13, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26, AO:40 };
 // N列(屋号)が空の場合はZ列(相談者名・屋号)を使う
 function getYago(row) {
   const n = gv(row,'N');
@@ -639,7 +641,26 @@ function loadSheet() {
         let data;
         try { data = JSON.parse(text); } catch(e) { throw new Error('レスポンスがJSON形式ではありません'); }
         if (!Array.isArray(data) || data.length < 2) { showError('データがありません'); return; }
-        allData = data.slice(2).filter(r => r.some(c => String(c).trim()));
+        gasUrl = val;
+        // 2行目(index1)がヘッダー、データは3行目(index2)から
+        // 実際のスプシ行番号 = dataのindex + 1（0始まりなので）
+        rowNumberMap = new Map();
+        allData = data.slice(2).filter((r, i) => {
+          if (!r.some(c => String(c).trim())) return false;
+          const sheetRow = i + 3; // slice(2)後のindex i → 元のdataのindex i+2 → 行番号 i+3
+          // rowIdはデータ確定後に設定するので仮保存
+          r._sheetRow = sheetRow;
+          return true;
+        });
+        // AO列（index40）が'✓'の行をcheckedIdsに追加
+        checkedIds = new Set();
+        allData.forEach(r => {
+          const ao = String(r[40] || '').trim();
+          if (ao === '✓' || ao === '1' || ao === 'TRUE' || ao === 'true') {
+            checkedIds.add(rowId(r));
+          }
+          rowNumberMap.set(rowId(r), r._sheetRow);
+        });
         populateGyoshuFilter();
         applyFilters();
         showToast(allData.length + '件のデータを読み込みました');
@@ -758,11 +779,17 @@ function renderTable(rows) {
 
 function toggleCheck(e, id, cb) {
   e.stopPropagation();
-  if (cb.checked) checkedIds.add(id); else checkedIds.delete(id);
+  const checked = cb.checked;
+  if (checked) checkedIds.add(id); else checkedIds.delete(id);
   applyFilters();
+  writeFlag(id, checked);
 }
 function toggleAll(master) {
-  currentRows.forEach(r => { const id = rowId(r); if (master.checked) checkedIds.add(id); else checkedIds.delete(id); });
+  currentRows.forEach(r => {
+    const id = rowId(r);
+    if (master.checked) checkedIds.add(id); else checkedIds.delete(id);
+    writeFlag(id, master.checked);
+  });
   applyFilters();
 }
 function updateStats(f) {
@@ -835,6 +862,7 @@ function markDoneFromModal() {
   const id = rowId(currentDetailRow);
   checkedIds.add(id);
   applyFilters();
+  writeFlag(id, true);
   showToast('入力済みにしました');
 }
 
@@ -867,10 +895,31 @@ function exportCSV() {
   a.click();
 }
 
+
+// ---- AO列へ書き込み ----
+function writeFlag(id, flag) {
+  if (!gasUrl) return; // GASのURLが未設定なら何もしない
+  const sheetRow = rowNumberMap.get(id);
+  if (!sheetRow) return;
+  fetch(gasUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ row: sheetRow, flag: flag })
+  })
+  .then(r => r.text())
+  .then(text => {
+    try {
+      const res = JSON.parse(text);
+      if (!res.success) console.warn('書き込み失敗', res);
+    } catch(e) { console.warn('書き込みレスポンス解析失敗', text); }
+  })
+  .catch(e => console.warn('書き込みエラー', e));
+}
 // ---- ログイン ----
 // ユーザー情報（ID: パスワード の形式で追加できます）
 const USERS = {
-  'nakamura': 'Yorozu-jimu-2026',
+  'yorozu': 'kagoshima2024',
   'admin':  'yorozu@admin'
 };
 const SESSION_KEY = 'yorozu_login';
