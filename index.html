@@ -428,8 +428,12 @@
       <span class="login-logo-text">相談者管理システム</span>
     </div>
     <div class="login-title">ログイン</div>
-    <div class="login-sub">IDとパスワードを入力してください</div>
+    <div class="login-sub">GASのURLとIDとパスワードを入力してください</div>
     <div class="login-error" id="loginError">IDまたはパスワードが正しくありません</div>
+    <div class="login-field">
+      <label>GAS URL</label>
+      <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzDbgi-GHs6t2fn9TCj6o_I2vGULDTVQribwYvXIMifMe1wjmdeFrKYuV-hZfwk3cQ3JA/exec" autocomplete="off" />
+    </div>
     <div class="login-field">
       <label>ユーザーID</label>
       <input type="text" id="loginId" placeholder="ID" autocomplete="username" />
@@ -463,23 +467,12 @@
   <!-- 接続 -->
   <div class="card">
     <div class="card-body">
-      <div class="info-note">
-        <strong>Apps Script の URL を貼り付けて読み込んでください。</strong><br>
-        スプレッドシートを開き「拡張機能 → Apps Script」で下記コードを貼り付け → デプロイ（ウェブアプリ／アクセス：全員）→ 発行された URL を下に入力してください。<br>
-        <code>function doGet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
-  var out = ContentService.createTextOutput(JSON.stringify(data));
-  out.setMimeType(ContentService.MimeType.JSON);
-  return out;
-}</code>
-      </div>
       <div class="connect-bar">
-        <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzDbgi-GHs6t2fn9TCj6o_I2vGULDTVQribwYvXIMifMe1wjmdeFrKYuV-hZfwk3cQ3JA/exec" />
         <button class="btn btn-primary" onclick="loadSheet()">
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          読み込む
+          データを読み込む
         </button>
+        <span style="font-size:12px;color:var(--text2);" id="gasUrlLabel"></span>
         <button class="btn" onclick="loadDemo()">デモデータ</button>
       </div>
     </div>
@@ -632,14 +625,17 @@ function loadSheet() {
 
   // Apps Script の exec URL が貼られた場合 → JSON取得
   if (val.includes('script.google.com')) {
-    fetch(val, { redirect: 'follow', mode: 'cors' })
+    const token = sessionStorage.getItem(SESSION_KEY);
+    fetch(val + '?action=getData&token=' + encodeURIComponent(token), { redirect: 'follow' })
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
       })
       .then(text => {
-        let data;
-        try { data = JSON.parse(text); } catch(e) { throw new Error('レスポンスがJSON形式ではありません'); }
+        let res;
+        try { res = JSON.parse(text); } catch(e) { throw new Error('レスポンスがJSON形式ではありません'); }
+        if (!res.success) { showError('認証エラー: ' + (res.error || '不明')); return; }
+        const data = res.data;
         if (!Array.isArray(data) || data.length < 2) { showError('データがありません'); return; }
         gasUrl = val;
         rowNumberMap = new Map();
@@ -920,7 +916,8 @@ function writeFlag(id, flag) {
   if (!gasUrl) { showToast('エラー: gasUrl未設定'); return; }
   const sheetRow = rowNumberMap.get(id);
   if (!sheetRow) { showToast('エラー: 行番号が見つかりません'); return; }
-  const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + (flag ? 'true' : 'false');
+  const token = sessionStorage.getItem(SESSION_KEY);
+  const url = gasUrl + '?action=setFlag&row=' + sheetRow + '&flag=' + (flag ? 'true' : 'false') + '&token=' + encodeURIComponent(token);
   showToast('書き込み中... 行' + sheetRow);
   fetch(url, { redirect: 'follow' })
     .then(r => r.text())
@@ -936,45 +933,79 @@ function writeFlag(id, flag) {
     })
     .catch(e => { showToast('通信エラー: ' + e.message); });
 }
-// ---- ログイン ----
-// ユーザー情報（ID: パスワード の形式で追加できます）
-const USERS = {
-  'yorozu': 'kagoshima2024',
-  'nakamura': 'Yorozu-jimu-2026',
-  'admin':  'yorozu@admin'
-};
-const SESSION_KEY = 'yorozu_login';
+// ---- ログイン（GAS認証方式）----
+// パスワードはGAS側で管理。HTMLには一切保存しない。
+const SESSION_KEY = 'yorozu_token';
+const GAS_URL_KEY = 'yorozu_gas_url';
+
+// 当日トークンを生成（GASと同じロジック: base64(yyyyMMdd:yorozu_secret_key)）
+function generateToken() {
+  const now = new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const d = jst.toISOString().slice(0,10).replace(/-/g,'');
+  return btoa(d + ':yorozu_secret_key');
+}
 
 function checkLogin() {
-  if (sessionStorage.getItem(SESSION_KEY) === 'ok') {
+  const token = sessionStorage.getItem(SESSION_KEY);
+  if (token) {
     document.getElementById('loginOverlay').style.display = 'none';
+    // GAS URLをセッションから復元
+    const savedUrl = sessionStorage.getItem(GAS_URL_KEY);
+    if (savedUrl) {
+      gasUrl = savedUrl;
+      const lbl = document.getElementById('gasUrlLabel');
+      if (lbl) lbl.textContent = '接続先: ' + savedUrl.slice(0, 60) + '...';
+    }
   }
-  // Enterキーでログイン
-  document.getElementById('loginPass').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  document.getElementById('loginId').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
+  document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('loginId').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 }
 
 function doLogin() {
   const id   = document.getElementById('loginId').value.trim();
   const pass = document.getElementById('loginPass').value;
   const err  = document.getElementById('loginError');
-  if (USERS[id] && USERS[id] === pass) {
-    sessionStorage.setItem(SESSION_KEY, 'ok');
-    document.getElementById('loginOverlay').style.display = 'none';
-    err.classList.remove('show');
-  } else {
+  const url  = document.getElementById('sheetInput').value.trim();
+
+  if (!url.includes('script.google.com')) {
+    err.textContent = 'GASのURLが入力されていません';
     err.classList.add('show');
-    document.getElementById('loginPass').value = '';
-    document.getElementById('loginPass').focus();
+    return;
   }
+
+  err.classList.remove('show');
+  document.querySelector('.login-btn').textContent = '認証中...';
+
+  fetch(url + '?action=login&id=' + encodeURIComponent(id) + '&pass=' + encodeURIComponent(pass), { redirect: 'follow' })
+    .then(r => r.text())
+    .then(text => {
+      const res = JSON.parse(text);
+      if (res.success) {
+        const token = generateToken();
+        sessionStorage.setItem(SESSION_KEY, token);
+        sessionStorage.setItem(GAS_URL_KEY, url);
+        gasUrl = url;
+        document.getElementById('loginOverlay').style.display = 'none';
+      } else {
+        err.textContent = 'IDまたはパスワードが正しくありません';
+        err.classList.add('show');
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginPass').focus();
+      }
+    })
+    .catch(() => {
+      err.textContent = '通信エラーが発生しました。GASのURLを確認してください。';
+      err.classList.add('show');
+    })
+    .finally(() => {
+      document.querySelector('.login-btn').textContent = 'ログイン';
+    });
 }
 
 function doLogout() {
   sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(GAS_URL_KEY);
   location.reload();
 }
 
