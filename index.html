@@ -432,7 +432,7 @@
     <div class="login-error" id="loginError">IDまたはパスワードが正しくありません</div>
     <div class="login-field">
       <label>GAS URL</label>
-      <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbzDbgi-GHs6t2fn9TCj6o_I2vGULDTVQribwYvXIMifMe1wjmdeFrKYuV-hZfwk3cQ3JA/exec" autocomplete="off" />
+      <input type="text" id="sheetInput" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycby9xTCkfHmiISCAwiL5ho6xnQNvX7Sad41ui_ZZ5fyN7v4RQ_QQNmDuAfpmJ4tf/exec" autocomplete="off" />
     </div>
     <div class="login-field">
       <label>ユーザーID</label>
@@ -977,16 +977,24 @@ function doLogin() {
   err.classList.remove('show');
   document.querySelector('.login-btn').textContent = '認証中...';
 
-  fetch(url + '?action=login&id=' + encodeURIComponent(id) + '&pass=' + encodeURIComponent(pass), { redirect: 'follow' })
-    .then(r => r.text())
+  // GASへのfetchはリダイレクトがあるためno-corsではなくfollowで
+  const loginUrl = url + '?action=login&id=' + encodeURIComponent(id) + '&pass=' + encodeURIComponent(pass);
+  fetch(loginUrl, { method: 'GET', redirect: 'follow' })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
     .then(text => {
-      const res = JSON.parse(text);
+      let res;
+      try { res = JSON.parse(text); } catch(e) { throw new Error('レスポンス解析失敗: ' + text.slice(0,80)); }
       if (res.success) {
         const token = generateToken();
         sessionStorage.setItem(SESSION_KEY, token);
         sessionStorage.setItem(GAS_URL_KEY, url);
         gasUrl = url;
         document.getElementById('loginOverlay').style.display = 'none';
+        // ログイン成功後に自動でデータ読み込み
+        loadSheet();
       } else {
         err.textContent = 'IDまたはパスワードが正しくありません';
         err.classList.add('show');
@@ -994,8 +1002,8 @@ function doLogin() {
         document.getElementById('loginPass').focus();
       }
     })
-    .catch(() => {
-      err.textContent = '通信エラーが発生しました。GASのURLを確認してください。';
+    .catch(e => {
+      err.textContent = '通信エラー: ' + e.message;
       err.classList.add('show');
     })
     .finally(() => {
