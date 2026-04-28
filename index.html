@@ -559,7 +559,7 @@ let allData = [], checkedIds = new Set(), currentRows = [], currentDetailRow = n
 let gasUrl = ''; // GAS URL を保持（書き込みに使う）
 let rowNumberMap = new Map(); // rowId → スプシの実際の行番号
 
-const COL = { ts:0, B:1, C:6, H:7, K:10, L:11, M:12, N:13, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26, AO:40 };
+const COL = { ts:0, B:1, C:6, H:7, I:8, J:9, K:10, L:11, M:12, N:13, O:14, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26, AO:40 };
 // N列(屋号)が空の場合はZ列(相談者名・屋号)を使う
 function getYago(row) {
   const n = gv(row,'N');
@@ -576,6 +576,9 @@ const SECTIONS = [
     { label: '代表者の氏名', key: 'P' },
     { label: '相談者名', key: 'C' },
     { label: 'お名前（カタカナ）', key: 'H' },
+    { label: '年齢', key: 'I' },
+    { label: '性別', key: 'J' },
+    { label: '役職', key: 'O' },
     { label: 'タイムスタンプ', key: 'ts' },
   ]},
   { title: '連絡先', fields: [
