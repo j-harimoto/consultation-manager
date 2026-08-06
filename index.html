@@ -559,7 +559,7 @@ let allData = [], checkedIds = new Set(), currentRows = [], currentDetailRow = n
 let gasUrl = ''; // GAS URL を保持（書き込みに使う）
 let rowNumberMap = new Map(); // rowId → スプシの実際の行番号
 
-const COL = { ts:0, B:1, C:6, H:7, I:8, J:9, K:10, L:11, M:12, N:13, O:14, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, Z:25, AA:26, AO:40 };
+const COL = { ts:0, B:1, C:6, H:7, I:8, J:9, K:10, L:11, M:12, N:13, O:14, P:15, Q:16, R:17, S:18, T:19, U:20, V:21, W:22, X:23, Z:25, AA:26, AO:40 };
 // N列(屋号)が空の場合はZ列(相談者名・屋号)を使う
 function getYago(row) {
   const n = gv(row,'N');
@@ -595,6 +595,7 @@ const SECTIONS = [
     { label: '売上高', key: 'U' },
     { label: '従業員数', key: 'V' },
     { label: '創業時期', key: 'W' },
+    { label: '直近の決算年月日', key: 'X' },
     { label: '紹介支援機関', key: 'AA' },
   ]},
 ];
@@ -899,10 +900,10 @@ function showToast(msg) {
 // ---- CSV書き出し ----
 function exportCSV() {
   if (!currentRows.length) { alert('エクスポートするデータがありません'); return; }
-  const h = ['タイムスタンプ','メールアドレス','相談者名','カタカナ氏名','電話番号','所在地','屋号','代表者氏名','業種','主要事業','会社形態','資本金','売上高','従業員数','創業時期','状態'];
+  const h = ['タイムスタンプ','メールアドレス','相談者名','カタカナ氏名','電話番号','所在地','屋号','代表者氏名','業種','主要事業','会社形態','資本金','売上高','従業員数','創業時期','直近の決算年月日','状態'];
   const lines = [h.join(',')];
   currentRows.forEach(r => {
-    const v = ['ts','B','C','H','K','M','N','P','Q','R','S','T','U','V','W'].map(k => `"${gv(r,k).replace(/"/g,'""')}"`);
+    const v = ['ts','B','C','H','K','M','N','P','Q','R','S','T','U','V','W','X'].map(k => `"${gv(r,k).replace(/"/g,'""')}"`);
     v.push(`"${checkedIds.has(rowId(r)) ? '入力済み' : '未処理'}"`);
     lines.push(v.join(','));
   });
